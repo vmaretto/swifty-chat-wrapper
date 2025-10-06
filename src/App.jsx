@@ -31,9 +31,9 @@ export default function App() {
     } else if (lowerMessage.includes('aiuto') || lowerMessage.includes('help')) {
       return 'Sono qui per aiutarti con Switch Food Explorer! Posso rispondere a domande su ricette, ingredienti, valori nutrizionali e molto altro. Cosa ti serve?';
     } else if (lowerMessage.includes('ciao') || lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return 'Ciao! 👋 Benvenuto su Switch Food Explorer. Posso aiutarti a creare ricette gustose e salutari!';
+      return 'Ciao! Benvenuto su Switch Food Explorer. Posso aiutarti a creare ricette gustose e salutari!';
     } else if (lowerMessage.includes('grazie') || lowerMessage.includes('thanks')) {
-      return 'Prego! Sono sempre qui se hai bisogno di altro aiuto. 😊';
+      return 'Prego! Sono sempre qui se hai bisogno di altro aiuto.';
     } else {
       return 'Capisco la tua domanda. Prova a usare il form sulla pagina per esplorare le funzionalità di Switch Food Explorer. Se hai bisogno di assistenza specifica, chiedi pure!';
     }
@@ -81,8 +81,8 @@ export default function App() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      {/* Chatbot Overlay */}
-     <div className="fixed bottom-6 right-6" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+      {/* Chatbot Overlay - SPOSTATO IN ALTO A SINISTRA */}
+      <div style={{ position: 'fixed', top: '80px', left: '24px', zIndex: 999999 }}>
         {/* Chat Panel */}
         {isOpen && (
           <div className="mb-4 w-[380px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200">
