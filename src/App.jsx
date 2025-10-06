@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 export default function App() {
-  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { 
       id: 1, 
@@ -71,117 +70,85 @@ export default function App() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
-      {/* Iframe Full Screen */}
-      <iframe
-        src="https://switch-food-explorer.posti.world/recipe-creation"
-        className="absolute inset-0 w-full h-full border-0"
-        title="Switch Food Explorer"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      />
-
-      {/* Chatbot Overlay - SPOSTATO IN ALTO A SINISTRA */}
-      <div style={{ position: 'fixed', top: '80px', left: '24px', zIndex: 999999 }}>
-        {/* Chat Panel */}
-        {isOpen && (
-          <div className="mb-4 w-[380px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold text-emerald-600 text-lg shadow-md">
-                  S
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white text-lg">Swifty</h3>
-                  <p className="text-emerald-50 text-xs">Chat Assistant</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-white hover:text-emerald-100 transition-colors p-1"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-stone-50">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                      msg.sender === 'user'
-                        ? 'bg-emerald-500 text-white rounded-br-sm'
-                        : 'bg-white text-stone-800 rounded-bl-sm shadow-sm border border-stone-200'
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed">{msg.text}</p>
-                  </div>
-                </div>
-              ))}
-              
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-white text-stone-800 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm border border-stone-200">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input Area */}
-            <div className="p-4 bg-white border-t border-stone-200">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Scrivi un messaggio..."
-                  className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm bg-stone-50"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={inputValue.trim() === ''}
-                  className="px-5 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
-                >
-                  Invia
-                </button>
-              </div>
-            </div>
+    <div className="flex h-screen w-screen overflow-hidden bg-stone-50">
+      {/* Sidebar Chatbot - Sempre visibile */}
+      <div className="w-96 bg-white shadow-2xl flex flex-col border-r border-stone-200">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-6 py-5 flex items-center gap-3">
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold text-emerald-600 text-xl shadow-md">
+            S
           </div>
-        )}
+          <div>
+            <h1 className="font-bold text-white text-xl">Swifty</h1>
+            <p className="text-emerald-50 text-sm">Chat Assistant per Switch Food Explorer</p>
+          </div>
+        </div>
 
-        {/* Floating Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-green-500 text-white rounded-full shadow-2xl hover:shadow-emerald-300/50 transition-all hover:scale-110 flex items-center justify-center font-bold text-2xl border-4 border-white"
-        >
-          {isOpen ? (
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          ) : (
-            'S'
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-stone-50">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] px-4 py-3 rounded-2xl ${
+                  msg.sender === 'user'
+                    ? 'bg-emerald-500 text-white rounded-br-sm'
+                    : 'bg-white text-stone-800 rounded-bl-sm shadow-sm border border-stone-200'
+                }`}
+              >
+                <p className="text-sm leading-relaxed">{msg.text}</p>
+              </div>
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-white text-stone-800 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm border border-stone-200">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                </div>
+              </div>
+            </div>
           )}
-        </button>
+          
+          <div ref={messagesEndRef} />
+        </div>
 
-        {/* Pulsating Ring Animation */}
-        {!isOpen && (
-          <div className="absolute inset-0 w-16 h-16 rounded-full bg-emerald-400 animate-ping opacity-20"></div>
-        )}
+        {/* Input Area */}
+        <div className="p-5 bg-white border-t border-stone-200">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Scrivi un messaggio..."
+              className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm bg-stone-50"
+            />
+            <button
+              onClick={handleSend}
+              disabled={inputValue.trim() === ''}
+              className="px-5 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
+            >
+              Invia
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Iframe - Occupa il resto dello spazio */}
+      <div className="flex-1 relative">
+        <iframe
+          src="https://switch-food-explorer.posti.world/recipe-creation"
+          className="absolute inset-0 w-full h-full border-0"
+          title="Switch Food Explorer"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        />
       </div>
     </div>
   );
