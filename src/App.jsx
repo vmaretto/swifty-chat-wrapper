@@ -82,7 +82,7 @@ export default function App() {
       />
 
       {/* Chatbot Overlay */}
-      <div className="fixed bottom-6 right-6 z-50">
+     <div className="fixed bottom-6 right-6" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
         {/* Chat Panel */}
         {isOpen && (
           <div className="mb-4 w-[380px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200">
