@@ -60,20 +60,41 @@ const extractIngredients = (doc) => {
   return [];
 };
 
-export const extractRecipeDataFromIframe = async () => {
-  const iframe = document.querySelector('iframe');
-
-  if (!iframe || !iframe.contentWindow) {
-    return null;
+const getIframeDocument = (iframe) => {
+  if (!iframe) {
+    return { doc: null, error: { type: 'IFRAME_NOT_FOUND' } };
   }
 
   try {
-    const doc = iframe.contentWindow.document;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document || null;
 
     if (!doc) {
-      return null;
+      return { doc: null, error: { type: 'IFRAME_DOCUMENT_UNAVAILABLE' } };
     }
 
+    return { doc, error: null };
+  } catch (error) {
+    const isCorsIssue =
+      error instanceof DOMException &&
+      (error.name === 'SecurityError' || error.message?.includes('Permission denied'));
+
+    if (isCorsIssue) {
+      return { doc: null, error: { type: 'IFRAME_CORS_BLOCKED', cause: error } };
+    }
+
+    return { doc: null, error: { type: 'UNKNOWN_ERROR', cause: error } };
+  }
+};
+
+export const extractRecipeDataFromIframe = async () => {
+  const iframe = document.querySelector('iframe');
+  const { doc, error } = getIframeDocument(iframe);
+
+  if (error || !doc) {
+    return { data: null, error };
+  }
+
+  try {
     const recipeName = selectTextContent(doc, [
       'input[name="recipe-name"]',
       '[data-testid="recipe-name"]',
@@ -119,23 +140,44 @@ export const extractRecipeDataFromIframe = async () => {
     const ingredients = extractIngredients(doc);
 
     return {
-      metadata: {
-        name: recipeName || 'Ricetta senza nome',
-        creation_date: new Date().toISOString(),
-        version: '1.0'
+      data: {
+        metadata: {
+          name: recipeName || 'Ricetta senza nome',
+          creation_date: new Date().toISOString(),
+          version: '1.0'
+        },
+        metrics: {
+          carbon_footprint: carbon || '',
+          water_footprint: water || '',
+          calories: calories || ''
+        },
+        ingredients,
+        instructions: instructions || '',
+        notes: 'Estratti automaticamente da Switch Food Explorer'
       },
-      metrics: {
-        carbon_footprint: carbon || '',
-        water_footprint: water || '',
-        calories: calories || ''
-      },
-      ingredients,
-      instructions: instructions || '',
-      notes: 'Estratti automaticamente da Switch Food Explorer'
+      error: null
     };
-  } catch (error) {
-    console.warn('Errore lettura iframe:', error);
+  } catch (cause) {
+    return { data: null, error: { type: 'PARSE_ERROR', cause } };
+  }
+};
+
+const describeIframeError = (error) => {
+  if (!error) {
     return null;
+  }
+
+  switch (error.type) {
+    case 'IFRAME_NOT_FOUND':
+      return 'Iframe di Switch Food Explorer non trovato nella pagina.';
+    case 'IFRAME_DOCUMENT_UNAVAILABLE':
+      return 'Il contenuto dell’iframe non è ancora disponibile.';
+    case 'IFRAME_CORS_BLOCKED':
+      return 'Il browser blocca l’accesso ai dati di Switch Food Explorer (restrizioni CORS).';
+    case 'PARSE_ERROR':
+      return 'Impossibile interpretare la struttura della ricetta nell’iframe.';
+    default:
+      return 'Errore sconosciuto durante la lettura dell’iframe di Switch Food Explorer.';
   }
 };
 
@@ -152,9 +194,18 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
   const [isIframeLive, setIsIframeLive] = useState(false);
+  const [iframeError, setIframeError] = useState(null);
   const messagesEndRef = useRef(null);
   const recipeDataRef = useRef(null);
   const isAutoAnalysisActive = useRef(false);
+  const lastIframeErrorType = useRef(null);
+
+  const iframeStatus = iframeError
+    ? { label: '⚠️ errore', className: 'text-amber-200' }
+    : isIframeLive
+    ? { label: '🟢 live', className: 'text-green-300' }
+    : { label: '🔴 offline', className: 'text-red-300' };
+  const iframeErrorMessage = describeIframeError(iframeError);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -164,21 +215,45 @@ export default function App() {
     let isMounted = true;
 
     const pollIframe = async () => {
-      const newData = await extractRecipeDataFromIframe();
+      const { data, error } = await extractRecipeDataFromIframe();
 
       if (!isMounted) {
         return;
       }
 
-      if (newData) {
+      if (error) {
+        setIsIframeLive(false);
+        setIframeError(error);
+
+        if (error.type === 'IFRAME_CORS_BLOCKED') {
+          recipeDataRef.current = null;
+          setRecipeData(null);
+        }
+
+        if (lastIframeErrorType.current !== error.type) {
+          lastIframeErrorType.current = error.type;
+
+          if (error.cause) {
+            console.warn('Errore lettura iframe SFE:', error.cause);
+          } else {
+            console.warn('Errore lettura iframe SFE:', error.type);
+          }
+        }
+
+        return;
+      }
+
+      if (data) {
         setIsIframeLive(true);
+        setIframeError(null);
+        lastIframeErrorType.current = null;
 
         const previousData = recipeDataRef.current;
         const normalizedData = {
-          ...newData,
+          ...data,
           metadata: {
-            ...newData.metadata,
-            creation_date: previousData?.metadata?.creation_date || newData.metadata.creation_date
+            ...data.metadata,
+            creation_date: previousData?.metadata?.creation_date || data.metadata.creation_date
           }
         };
 
@@ -189,8 +264,6 @@ export default function App() {
           setRecipeData(normalizedData);
           console.log('SFE data aggiornata:', normalizedData);
         }
-      } else {
-        setIsIframeLive(false);
       }
     };
 
@@ -335,8 +408,8 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-lg font-bold text-white">Swifty</h1>
-                    <span className={`text-xs ${isIframeLive ? 'text-green-300' : 'text-red-300'}`}>
-                      {isIframeLive ? '🟢 live' : '🔴 offline'}
+                    <span className={`text-xs ${iframeStatus.className}`}>
+                      {iframeStatus.label}
                     </span>
                   </div>
                   <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
@@ -354,6 +427,11 @@ export default function App() {
             {/* Messages Area */}
             <div className="flex h-96 flex-col bg-stone-50">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {iframeErrorMessage && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    {iframeErrorMessage}
+                  </div>
+                )}
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
