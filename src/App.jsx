@@ -1,6 +1,185 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+const selectTextContent = (root, selectors = []) => {
+  for (const selector of selectors) {
+    const element = root.querySelector(selector);
+    if (element) {
+      const value = element.value ?? element.textContent;
+      if (value) {
+        return value.trim();
+      }
+    }
+  }
+  return '';
+};
 
+const extractIngredients = (doc) => {
+  const ingredientSelectors = [
+    '.ingredient-row',
+    '[data-testid="ingredient-row"]',
+    '.IngredientRow',
+    '[data-component="IngredientRow"]'
+  ];
+
+  for (const selector of ingredientSelectors) {
+    const rows = Array.from(doc.querySelectorAll(selector));
+    if (rows.length) {
+      return rows
+        .map((row) => {
+          const name = selectTextContent(row, [
+            '.ingredient-name',
+            '[data-testid="ingredient-name"]',
+            '.IngredientName',
+            '[data-component="IngredientName"]',
+            'input[name*="ingredient-name"]',
+            '.name'
+          ]);
+
+          const quantity = selectTextContent(row, [
+            '.ingredient-quantity',
+            '[data-testid="ingredient-quantity"]',
+            '.IngredientQuantity',
+            '[data-component="IngredientQuantity"]',
+            'input[name*="ingredient-quantity"]',
+            '.quantity'
+          ]);
+
+          if (!name && !quantity) {
+            return null;
+          }
+
+          return {
+            name: name || '',
+            quantity: quantity || ''
+          };
+        })
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+};
+
+const getIframeDocument = (iframe) => {
+  if (!iframe) {
+    return { doc: null, error: { type: 'IFRAME_NOT_FOUND' } };
+  }
+
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document || null;
+
+    if (!doc) {
+      return { doc: null, error: { type: 'IFRAME_DOCUMENT_UNAVAILABLE' } };
+    }
+
+    return { doc, error: null };
+  } catch (error) {
+    const isCorsIssue =
+      error instanceof DOMException &&
+      (error.name === 'SecurityError' || error.message?.includes('Permission denied'));
+
+    if (isCorsIssue) {
+      return { doc: null, error: { type: 'IFRAME_CORS_BLOCKED', cause: error } };
+    }
+
+    return { doc: null, error: { type: 'UNKNOWN_ERROR', cause: error } };
+  }
+};
+
+export const extractRecipeDataFromIframe = async () => {
+  const iframe = document.querySelector('iframe');
+  const { doc, error } = getIframeDocument(iframe);
+
+  if (error || !doc) {
+    return { data: null, error };
+  }
+
+  try {
+    const recipeName = selectTextContent(doc, [
+      'input[name="recipe-name"]',
+      '[data-testid="recipe-name"]',
+      '.recipe-name input',
+      '.RecipeName input',
+      '.recipe-name',
+      '.RecipeName',
+      'h1'
+    ]);
+
+    const carbon = selectTextContent(doc, [
+      '.carbon-footprint',
+      '[data-testid="carbon-footprint"]',
+      '.CarbonFootprint',
+      '[data-component="CarbonFootprint"]',
+      'span[data-label="carbon"]'
+    ]);
+
+    const water = selectTextContent(doc, [
+      '.water-footprint',
+      '[data-testid="water-footprint"]',
+      '.WaterFootprint',
+      '[data-component="WaterFootprint"]',
+      'span[data-label="water"]'
+    ]);
+
+    const calories = selectTextContent(doc, [
+      '.calories',
+      '[data-testid="calories"]',
+      '.Calories',
+      '[data-component="Calories"]',
+      'span[data-label="calories"]'
+    ]);
+
+    const instructions = selectTextContent(doc, [
+      '.instructions',
+      '[data-testid="instructions"]',
+      '.Instructions',
+      '[data-component="Instructions"]',
+      'textarea[name="instructions"]'
+    ]);
+
+    const ingredients = extractIngredients(doc);
+
+    return {
+      data: {
+        metadata: {
+          name: recipeName || 'Ricetta senza nome',
+          creation_date: new Date().toISOString(),
+          version: '1.0'
+        },
+        metrics: {
+          carbon_footprint: carbon || '',
+          water_footprint: water || '',
+          calories: calories || ''
+        },
+        ingredients,
+        instructions: instructions || '',
+        notes: 'Estratti automaticamente da Switch Food Explorer'
+      },
+      error: null
+    };
+  } catch (cause) {
+    return { data: null, error: { type: 'PARSE_ERROR', cause } };
+  }
+};
+
+const describeIframeError = (error) => {
+  if (!error) {
+    return null;
+  }
+
+  switch (error.type) {
+    case 'IFRAME_NOT_FOUND':
+      return 'Iframe di Switch Food Explorer non trovato nella pagina.';
+    case 'IFRAME_DOCUMENT_UNAVAILABLE':
+      return 'Il contenuto dell’iframe non è ancora disponibile.';
+    case 'IFRAME_CORS_BLOCKED':
+      return 'Il browser blocca l’accesso ai dati di Switch Food Explorer (restrizioni CORS).';
+    case 'PARSE_ERROR':
+      return 'Impossibile interpretare la struttura della ricetta nell’iframe.';
+    default:
+      return 'Errore sconosciuto durante la lettura dell’iframe di Switch Food Explorer.';
+  }
+};
 
 export default function App() {
   const [messages, setMessages] = useState([
@@ -14,51 +193,149 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
+  const [isIframeLive, setIsIframeLive] = useState(false);
+  const [iframeError, setIframeError] = useState(null);
   const messagesEndRef = useRef(null);
+  const recipeDataRef = useRef(null);
+  const isAutoAnalysisActive = useRef(false);
+  const lastIframeErrorType = useRef(null);
+
+  const iframeStatus = iframeError
+    ? { label: '⚠️ errore', className: 'text-amber-200' }
+    : isIframeLive
+    ? { label: '🟢 live', className: 'text-green-300' }
+    : { label: '🔴 offline', className: 'text-red-300' };
+  const iframeErrorMessage = describeIframeError(iframeError);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    setRecipeData({
-      name: 'Insalata Mediterranea Sostenibile',
-      carbon_footprint: '2.3 kg CO₂e per porzione',
-      water_footprint: '120 L di acqua',
-      calories: 420,
-      ingredients: [
-        { name: 'Ceci cotti', quantity: '150 g' },
-        { name: 'Pomodorini', quantity: '120 g' },
-        { name: 'Cetriolo', quantity: '80 g' },
-        { name: 'Olive nere', quantity: '30 g' },
-        { name: 'Olio extravergine di oliva', quantity: '1 cucchiaio' },
-        { name: 'Succo di limone', quantity: '1 cucchiaio' },
-        { name: 'Origano fresco', quantity: '1 cucchiaino' }
-      ],
-      instructions: 'Mescola tutti gli ingredienti in una ciotola capiente e condisci con olio, limone e origano. Servi fresca.'
-    });
+    let isMounted = true;
+
+    const pollIframe = async () => {
+      const { data, error } = await extractRecipeDataFromIframe();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        setIsIframeLive(false);
+        setIframeError(error);
+
+        if (error.type === 'IFRAME_CORS_BLOCKED') {
+          recipeDataRef.current = null;
+          setRecipeData(null);
+        }
+
+        if (lastIframeErrorType.current !== error.type) {
+          lastIframeErrorType.current = error.type;
+
+          if (error.cause) {
+            console.warn('Errore lettura iframe SFE:', error.cause);
+          } else {
+            console.warn('Errore lettura iframe SFE:', error.type);
+          }
+        }
+
+        return;
+      }
+
+      if (data) {
+        setIsIframeLive(true);
+        setIframeError(null);
+        lastIframeErrorType.current = null;
+
+        const previousData = recipeDataRef.current;
+        const normalizedData = {
+          ...data,
+          metadata: {
+            ...data.metadata,
+            creation_date: previousData?.metadata?.creation_date || data.metadata.creation_date
+          }
+        };
+
+        const hasChanged = JSON.stringify(previousData) !== JSON.stringify(normalizedData);
+
+        if (hasChanged) {
+          recipeDataRef.current = normalizedData;
+          setRecipeData(normalizedData);
+          console.log('SFE data aggiornata:', normalizedData);
+        }
+      }
+    };
+
+    const interval = setInterval(pollIframe, 5000);
+
+    pollIframe();
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const callChatGPT = async (recipeJson, userMessage) => {
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipeJson, message: userMessage }),
-    });
+  const callChatGPT = useCallback(async (recipeJson, userMessage) => {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeJson, message: userMessage })
+      });
 
-    if (!res.ok) {
-      console.error("Errore nella risposta dell’API:", res.statusText);
-      return "Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.";
+      if (!res.ok) {
+        console.error('Errore nella risposta dell’API:', res.statusText);
+        return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
+      }
+
+      const data = await res.json();
+      return data.reply || 'Nessuna risposta da Swifty.';
+    } catch (error) {
+      console.error('Errore nella chiamata a /api/chat:', error);
+      return 'Si è verificato un errore di rete. Controlla la connessione e riprova.';
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!recipeData || isAutoAnalysisActive.current) {
+      return;
     }
 
-    const data = await res.json();
-    return data.reply || "Nessuna risposta da Swifty.";
-  } catch (error) {
-    console.error("Errore nella chiamata a /api/chat:", error);
-    return "Si è verificato un errore di rete. Controlla la connessione e riprova.";
-  }
-};
+    let isCancelled = false;
+
+    const triggerAutoAnalysis = async () => {
+      isAutoAnalysisActive.current = true;
+
+      try {
+        const reply = await callChatGPT(
+          recipeData,
+          'Analizza la ricetta attuale e suggerisci miglioramenti in termini di sostenibilità e valori nutrizionali.'
+        );
+
+        if (!isCancelled) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              sender: 'swifty',
+              text: reply
+            }
+          ]);
+        }
+      } finally {
+        isAutoAnalysisActive.current = false;
+      }
+    };
+
+    triggerAutoAnalysis();
+
+    return () => {
+      isCancelled = true;
+      isAutoAnalysisActive.current = false;
+    };
+  }, [callChatGPT, recipeData]);
 
   const handleSend = async () => {
     const trimmedMessage = inputValue.trim();
@@ -118,7 +395,8 @@ export default function App() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      {/* Chatbot flottante */}      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+      {/* Chatbot flottante */}
+      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
         {isChatOpen && (
           <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
             {/* Header */}
@@ -128,7 +406,12 @@ export default function App() {
                   S
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">Swifty</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-white">Swifty</h1>
+                    <span className={`text-xs ${iframeStatus.className}`}>
+                      {iframeStatus.label}
+                    </span>
+                  </div>
                   <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
                 </div>
               </div>
@@ -144,6 +427,11 @@ export default function App() {
             {/* Messages Area */}
             <div className="flex h-96 flex-col bg-stone-50">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {iframeErrorMessage && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    {iframeErrorMessage}
+                  </div>
+                )}
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
