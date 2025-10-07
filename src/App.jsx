@@ -38,66 +38,25 @@ export default function App() {
   }, []);
 
   const callChatGPT = async (recipeJson, userMessage) => {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipeJson, message: userMessage }),
+    });
 
-    if (!apiKey) {
-      console.warn('OpenAI API key non configurata. Aggiungi VITE_OPENAI_API_KEY alle variabili di ambiente.');
-      return 'Al momento non riesco a collegarmi a ChatGPT perché manca la chiave API. Verifica la configurazione e riprova.';
+    if (!res.ok) {
+      console.error("Errore nella risposta dell’API:", res.statusText);
+      return "Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.";
     }
 
-    const messagesPayload = [
-      {
-        role: 'system',
-        content:
-          'Sei Swifty, un assistente gentile e competente per Switch Food Explorer. Usa i dati forniti per dare consigli su sostenibilità, ingredienti e ricette. Rispondi sempre in italiano.'
-      },
-      {
-        role: 'user',
-        content: `Dati della ricetta in JSON:\n${JSON.stringify(recipeJson ?? {}, null, 2)}\n\nDomanda dell\'utente: ${userMessage}\n\nFornisci una risposta chiara e pratica.`
-      }
-    ];
-
-    const fetchCompletion = async (model) => {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages: messagesPayload,
-          temperature: 0.6
-        })
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const errorMessage = data?.error?.message ?? `La richiesta al modello ${model} non è andata a buon fine.`;
-        const error = new Error(errorMessage);
-        error.status = response.status;
-        error.model = model;
-        error.details = data;
-        throw error;
-      }
-
-      return data?.choices?.[0]?.message?.content?.trim() ?? 'Non ho ricevuto una risposta utile da ChatGPT in questo momento.';
-    };
-
-    try {
-      return await fetchCompletion('gpt-4o-mini');
-    } catch (error) {
-      console.warn('Errore chiamando gpt-4o-mini:', error);
-
-      try {
-        return await fetchCompletion('gpt-4-turbo');
-      } catch (fallbackError) {
-        console.warn('Errore chiamando gpt-4-turbo:', fallbackError);
-        return 'Al momento non riesco a contattare ChatGPT. Riprova più tardi o verifica la connessione.';
-      }
-    }
-  };
+    const data = await res.json();
+    return data.reply || "Nessuna risposta da Swifty.";
+  } catch (error) {
+    console.error("Errore nella chiamata a /api/chat:", error);
+    return "Si è verificato un errore di rete. Controlla la connessione e riprova.";
+  }
+};
 
   const handleSend = async () => {
     const trimmedMessage = inputValue.trim();
