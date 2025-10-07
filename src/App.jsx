@@ -2,64 +2,141 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function App() {
   const [messages, setMessages] = useState([
-    { 
-      id: 1, 
-      sender: 'swifty', 
-      text: 'Ciao! Sono Swifty, il tuo assistente per Switch Food Explorer. Come posso aiutarti oggi?' 
+    {
+      id: 1,
+      sender: 'swifty',
+      text: 'Ciao! Sono Swifty, il tuo assistente per Switch Food Explorer. Come posso aiutarti oggi?'
     }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [recipeData, setRecipeData] = useState(null);
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const generateResponse = (userMessage) => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes('ricetta') || lowerMessage.includes('recipe')) {
-      return 'Puoi creare ricette personalizzate usando il form sulla pagina! Basta compilare gli ingredienti e le istruzioni. Vuoi che ti guidi passo dopo passo?';
-    } else if (lowerMessage.includes('ingredienti') || lowerMessage.includes('ingredients')) {
-      return 'Gli ingredienti possono essere aggiunti uno alla volta. Ricorda di specificare le quantità per ottenere calcoli nutrizionali accurati!';
-    } else if (lowerMessage.includes('aiuto') || lowerMessage.includes('help')) {
-      return 'Sono qui per aiutarti con Switch Food Explorer! Posso rispondere a domande su ricette, ingredienti, valori nutrizionali e molto altro. Cosa ti serve?';
-    } else if (lowerMessage.includes('ciao') || lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return 'Ciao! Benvenuto su Switch Food Explorer. Posso aiutarti a creare ricette gustose e salutari!';
-    } else if (lowerMessage.includes('grazie') || lowerMessage.includes('thanks')) {
-      return 'Prego! Sono sempre qui se hai bisogno di altro aiuto.';
-    } else {
-      return 'Capisco la tua domanda. Prova a usare il form sulla pagina per esplorare le funzionalità di Switch Food Explorer. Se hai bisogno di assistenza specifica, chiedi pure!';
+  useEffect(() => {
+    setRecipeData({
+      name: 'Insalata Mediterranea Sostenibile',
+      carbon_footprint: '2.3 kg CO₂e per porzione',
+      water_footprint: '120 L di acqua',
+      calories: 420,
+      ingredients: [
+        { name: 'Ceci cotti', quantity: '150 g' },
+        { name: 'Pomodorini', quantity: '120 g' },
+        { name: 'Cetriolo', quantity: '80 g' },
+        { name: 'Olive nere', quantity: '30 g' },
+        { name: 'Olio extravergine di oliva', quantity: '1 cucchiaio' },
+        { name: 'Succo di limone', quantity: '1 cucchiaio' },
+        { name: 'Origano fresco', quantity: '1 cucchiaino' }
+      ],
+      instructions: 'Mescola tutti gli ingredienti in una ciotola capiente e condisci con olio, limone e origano. Servi fresca.'
+    });
+  }, []);
+
+  const callChatGPT = async (recipeJson, userMessage) => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('OpenAI API key non configurata. Aggiungi VITE_OPENAI_API_KEY alle variabili di ambiente.');
+      return 'Al momento non riesco a collegarmi a ChatGPT perché manca la chiave API. Verifica la configurazione e riprova.';
+    }
+
+    const messagesPayload = [
+      {
+        role: 'system',
+        content:
+          'Sei Swifty, un assistente gentile e competente per Switch Food Explorer. Usa i dati forniti per dare consigli su sostenibilità, ingredienti e ricette. Rispondi sempre in italiano.'
+      },
+      {
+        role: 'user',
+        content: `Dati della ricetta in JSON:\n${JSON.stringify(recipeJson ?? {}, null, 2)}\n\nDomanda dell\'utente: ${userMessage}\n\nFornisci una risposta chiara e pratica.`
+      }
+    ];
+
+    const fetchCompletion = async (model) => {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: messagesPayload,
+          temperature: 0.6
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage = data?.error?.message ?? `La richiesta al modello ${model} non è andata a buon fine.`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.model = model;
+        error.details = data;
+        throw error;
+      }
+
+      return data?.choices?.[0]?.message?.content?.trim() ?? 'Non ho ricevuto una risposta utile da ChatGPT in questo momento.';
+    };
+
+    try {
+      return await fetchCompletion('gpt-4o-mini');
+    } catch (error) {
+      console.warn('Errore chiamando gpt-4o-mini:', error);
+
+      try {
+        return await fetchCompletion('gpt-4-turbo');
+      } catch (fallbackError) {
+        console.warn('Errore chiamando gpt-4-turbo:', fallbackError);
+        return 'Al momento non riesco a contattare ChatGPT. Riprova più tardi o verifica la connessione.';
+      }
     }
   };
 
-  const handleSend = () => {
-    if (inputValue.trim() === '') return;
+  const handleSend = async () => {
+    const trimmedMessage = inputValue.trim();
+
+    if (trimmedMessage === '') return;
 
     const userMessage = {
       id: Date.now(),
       sender: 'user',
-      text: inputValue
+      text: trimmedMessage
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const reply = await callChatGPT(recipeData, trimmedMessage);
+
       const botResponse = {
         id: Date.now() + 1,
         sender: 'swifty',
-        text: generateResponse(inputValue)
+        text: reply
       };
-      setMessages(prev => [...prev, botResponse]);
+
+      setMessages((prev) => [...prev, botResponse]);
+    } catch (error) {
+      console.warn('Errore inatteso durante la chiamata a ChatGPT:', error);
+
+      const fallbackResponse = {
+        id: Date.now() + 1,
+        sender: 'swifty',
+        text: 'Si è verificato un problema inatteso durante la chiamata a ChatGPT. Per favore riprova più tardi.'
+      };
+
+      setMessages((prev) => [...prev, fallbackResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -70,85 +147,109 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-stone-50">
-      {/* Sidebar Chatbot - Sempre visibile */}
-      <div className="w-96 bg-white shadow-2xl flex flex-col border-r border-stone-200">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-6 py-5 flex items-center gap-3">
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold text-emerald-600 text-xl shadow-md">
-            S
-          </div>
-          <div>
-            <h1 className="font-bold text-white text-xl">Swifty</h1>
-            <p className="text-emerald-50 text-sm">Chat Assistant per Switch Food Explorer</p>
-          </div>
-        </div>
+    <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
+      {/* Iframe - Occupa l'intera area */}
+      <iframe
+        src="https://switch-food-explorer.posti.world/recipe-creation"
+        className="absolute inset-0 h-full w-full border-0"
+        title="Switch Food Explorer"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      />
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-stone-50">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[85%] px-4 py-3 rounded-2xl ${
-                  msg.sender === 'user'
-                    ? 'bg-emerald-500 text-white rounded-br-sm'
-                    : 'bg-white text-stone-800 rounded-bl-sm shadow-sm border border-stone-200'
-                }`}
-              >
-                <p className="text-sm leading-relaxed">{msg.text}</p>
+      {/* Chatbot flottante */}
+      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+        {isChatOpen && (
+          <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-5 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-600 shadow-md">
+                  S
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">Swifty</h1>
+                  <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsChatOpen(false)}
+                className="rounded-full p-2 text-white transition hover:bg-emerald-500/40"
+              >
+                ✕
+              </button>
             </div>
-          ))}
-          
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white text-stone-800 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm border border-stone-200">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+
+            {/* Messages Area */}
+            <div className="flex h-96 flex-col bg-stone-50">
+              <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                        msg.sender === 'user'
+                          ? 'rounded-br-sm bg-emerald-500 text-white'
+                          : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800 shadow-sm'
+                      }`}
+                    >
+                      <p className="text-sm leading-relaxed">{msg.text}</p>
+                    </div>
+                  </div>
+                ))}
+
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl rounded-bl-sm border border-stone-200 bg-white px-4 py-3 text-stone-800 shadow-sm">
+                      <div className="flex gap-1">
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '0ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '150ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="border-t border-stone-200 bg-white p-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Scrivi un messaggio..."
+                    className="flex-1 rounded-xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={inputValue.trim() === ''}
+                    className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Invia
+                  </button>
                 </div>
               </div>
             </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="p-5 bg-white border-t border-stone-200">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Scrivi un messaggio..."
-              className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm bg-stone-50"
-            />
-            <button
-              onClick={handleSend}
-              disabled={inputValue.trim() === ''}
-              className="px-5 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
-            >
-              Invia
-            </button>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Iframe - Occupa il resto dello spazio */}
-      <div className="flex-1 relative">
-        <iframe
-          src="https://switch-food-explorer.posti.world/recipe-creation"
-          className="absolute inset-0 w-full h-full border-0"
-          title="Switch Food Explorer"
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        />
+        <button
+          type="button"
+          onClick={() => setIsChatOpen((prev) => !prev)}
+          className="pointer-events-auto flex items-center gap-3 rounded-full bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-xl transition hover:bg-emerald-600"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-base font-bold text-emerald-600 shadow">
+            S
+          </span>
+          <span>{isChatOpen ? 'Nascondi chat' : 'Apri chat'}</span>
+        </button>
       </div>
     </div>
   );
