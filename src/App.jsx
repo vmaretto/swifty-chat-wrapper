@@ -1,4 +1,20 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+
+async function callChatGPT(recipeJson, userMessage) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipeJson, message: userMessage })
+  });
+
+  if (!res.ok) {
+    console.error('Errore nella risposta dell’API:', res.statusText);
+    return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
+  }
+
+  const data = await res.json();
+  return data.reply || 'Nessuna risposta da Swifty.';
+}
 
 export default function App() {
   const [messages, setMessages] = useState([
@@ -37,6 +53,7 @@ export default function App() {
     if (!file) {
       return;
     }
+  }
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -74,23 +91,6 @@ export default function App() {
 
     reader.readAsText(file);
     event.target.value = '';
-  };
-
-  const callChatGPT = async (recipeJson, userMessage) => {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipeJson, message: userMessage })
-    });
-
-    if (!res.ok) {
-      console.error('Errore nella risposta dell’API:', res.statusText);
-      return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
-    }
-  }
-
-    const data = await res.json();
-    return data.reply || 'Nessuna risposta da Swifty.';
   };
 
   const handleSend = async () => {
