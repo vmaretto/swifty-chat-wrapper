@@ -193,6 +193,7 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
+  const [recipeSource, setRecipeSource] = useState(null);
   const [isIframeLive, setIsIframeLive] = useState(false);
   const [iframeError, setIframeError] = useState(null);
   const messagesEndRef = useRef(null);
@@ -228,6 +229,7 @@ export default function App() {
         if (error.type === 'IFRAME_CORS_BLOCKED') {
           recipeDataRef.current = null;
           setRecipeData(null);
+          setRecipeSource(null);
         }
 
         if (lastIframeErrorType.current !== error.type) {
@@ -262,6 +264,7 @@ export default function App() {
         if (hasChanged) {
           recipeDataRef.current = normalizedData;
           setRecipeData(normalizedData);
+          setRecipeSource('iframe');
           console.log('SFE data aggiornata:', normalizedData);
         }
       }
@@ -299,7 +302,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!recipeData || isAutoAnalysisActive.current) {
+    if (!recipeData || recipeSource !== 'iframe' || isAutoAnalysisActive.current) {
       return;
     }
 
@@ -335,7 +338,7 @@ export default function App() {
       isCancelled = true;
       isAutoAnalysisActive.current = false;
     };
-  }, [callChatGPT, recipeData]);
+  }, [callChatGPT, recipeData, recipeSource]);
 
   const handleFileUpload = (event) => {
     const file = event.target.files?.[0];
@@ -349,7 +352,9 @@ export default function App() {
       try {
         const jsonData = JSON.parse(e.target?.result ?? '');
 
+        recipeDataRef.current = jsonData;
         setRecipeData(jsonData);
+        setRecipeSource('upload');
         const recipeName = jsonData?.metadata?.name || 'Senza nome';
         const servings =
           jsonData?.metadata?.servings ??
@@ -525,7 +530,6 @@ export default function App() {
                     <input
                       id="fileUpload"
                       type="file"
-                      accept=".json"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
