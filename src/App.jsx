@@ -146,6 +146,8 @@ export default function App() {
     }
   };
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
       {/* Iframe - Occupa l'intera area */}
