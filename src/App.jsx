@@ -53,7 +53,6 @@ export default function App() {
     if (!file) {
       return;
     }
-  }
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -181,27 +180,21 @@ export default function App() {
 
             <div className="flex h-96 flex-col bg-stone-50">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                {iframeErrorMessage && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                    {iframeErrorMessage}
-                  </div>
-                )}
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                        msg.sender === 'user'
-                          ? 'rounded-br-sm bg-emerald-500 text-white'
-                          : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800 shadow-sm'
-                      }`}
-                    >
-                      <p className="text-sm leading-relaxed">{msg.text}</p>
+                {messages.map((msg) => {
+                  const isUser = msg.sender === 'user';
+                  const rowAlignment = isUser ? 'justify-end' : 'justify-start';
+                  const bubbleVariant = isUser
+                    ? 'rounded-br-sm bg-emerald-500 text-white'
+                    : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800 shadow-sm';
+
+                  return (
+                    <div key={msg.id} className={`flex ${rowAlignment}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${bubbleVariant}`}>
+                        <p className="text-sm leading-relaxed">{msg.text}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {isTyping && (
                   <div className="flex justify-start">
