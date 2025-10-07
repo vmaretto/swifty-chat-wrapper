@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 export default function App() {
   const [messages, setMessages] = useState([
@@ -12,7 +12,20 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
+  const [recipeSource, setRecipeSource] = useState(null);
+  const [isIframeLive, setIsIframeLive] = useState(false);
+  const [iframeError, setIframeError] = useState(null);
   const messagesEndRef = useRef(null);
+  const recipeDataRef = useRef(null);
+  const isAutoAnalysisActive = useRef(false);
+  const lastIframeErrorType = useRef(null);
+
+  const iframeStatus = iframeError
+    ? { label: '⚠️ errore', className: 'text-amber-200' }
+    : isIframeLive
+    ? { label: '🟢 live', className: 'text-green-300' }
+    : { label: '🔴 offline', className: 'text-red-300' };
+  const iframeErrorMessage = describeIframeError(iframeError);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -74,6 +87,7 @@ export default function App() {
       console.error('Errore nella risposta dell’API:', res.statusText);
       return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
     }
+  }, []);
 
     const data = await res.json();
     return data.reply || 'Nessuna risposta da Swifty.';
@@ -147,7 +161,12 @@ export default function App() {
                   S
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">Swifty</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-white">Swifty</h1>
+                    <span className={`text-xs ${iframeStatus.className}`}>
+                      {iframeStatus.label}
+                    </span>
+                  </div>
                   <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
                 </div>
               </div>
@@ -162,6 +181,11 @@ export default function App() {
 
             <div className="flex h-96 flex-col bg-stone-50">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {iframeErrorMessage && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    {iframeErrorMessage}
+                  </div>
+                )}
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
