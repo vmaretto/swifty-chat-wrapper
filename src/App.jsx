@@ -1,6 +1,143 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+const selectTextContent = (root, selectors = []) => {
+  for (const selector of selectors) {
+    const element = root.querySelector(selector);
+    if (element) {
+      const value = element.value ?? element.textContent;
+      if (value) {
+        return value.trim();
+      }
+    }
+  }
+  return '';
+};
 
+const extractIngredients = (doc) => {
+  const ingredientSelectors = [
+    '.ingredient-row',
+    '[data-testid="ingredient-row"]',
+    '.IngredientRow',
+    '[data-component="IngredientRow"]'
+  ];
+
+  for (const selector of ingredientSelectors) {
+    const rows = Array.from(doc.querySelectorAll(selector));
+    if (rows.length) {
+      return rows
+        .map((row) => {
+          const name = selectTextContent(row, [
+            '.ingredient-name',
+            '[data-testid="ingredient-name"]',
+            '.IngredientName',
+            '[data-component="IngredientName"]',
+            'input[name*="ingredient-name"]',
+            '.name'
+          ]);
+
+          const quantity = selectTextContent(row, [
+            '.ingredient-quantity',
+            '[data-testid="ingredient-quantity"]',
+            '.IngredientQuantity',
+            '[data-component="IngredientQuantity"]',
+            'input[name*="ingredient-quantity"]',
+            '.quantity'
+          ]);
+
+          if (!name && !quantity) {
+            return null;
+          }
+
+          return {
+            name: name || '',
+            quantity: quantity || ''
+          };
+        })
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+};
+
+export const extractRecipeDataFromIframe = async () => {
+  const iframe = document.querySelector('iframe');
+
+  if (!iframe || !iframe.contentWindow) {
+    return null;
+  }
+
+  try {
+    const doc = iframe.contentWindow.document;
+
+    if (!doc) {
+      return null;
+    }
+
+    const recipeName = selectTextContent(doc, [
+      'input[name="recipe-name"]',
+      '[data-testid="recipe-name"]',
+      '.recipe-name input',
+      '.RecipeName input',
+      '.recipe-name',
+      '.RecipeName',
+      'h1'
+    ]);
+
+    const carbon = selectTextContent(doc, [
+      '.carbon-footprint',
+      '[data-testid="carbon-footprint"]',
+      '.CarbonFootprint',
+      '[data-component="CarbonFootprint"]',
+      'span[data-label="carbon"]'
+    ]);
+
+    const water = selectTextContent(doc, [
+      '.water-footprint',
+      '[data-testid="water-footprint"]',
+      '.WaterFootprint',
+      '[data-component="WaterFootprint"]',
+      'span[data-label="water"]'
+    ]);
+
+    const calories = selectTextContent(doc, [
+      '.calories',
+      '[data-testid="calories"]',
+      '.Calories',
+      '[data-component="Calories"]',
+      'span[data-label="calories"]'
+    ]);
+
+    const instructions = selectTextContent(doc, [
+      '.instructions',
+      '[data-testid="instructions"]',
+      '.Instructions',
+      '[data-component="Instructions"]',
+      'textarea[name="instructions"]'
+    ]);
+
+    const ingredients = extractIngredients(doc);
+
+    return {
+      metadata: {
+        name: recipeName || 'Ricetta senza nome',
+        creation_date: new Date().toISOString(),
+        version: '1.0'
+      },
+      metrics: {
+        carbon_footprint: carbon || '',
+        water_footprint: water || '',
+        calories: calories || ''
+      },
+      ingredients,
+      instructions: instructions || '',
+      notes: 'Estratti automaticamente da Switch Food Explorer'
+    };
+  } catch (error) {
+    console.warn('Errore lettura iframe:', error);
+    return null;
+  }
+};
 
 export default function App() {
   const [messages, setMessages] = useState([
@@ -14,51 +151,118 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
+  const [isIframeLive, setIsIframeLive] = useState(false);
   const messagesEndRef = useRef(null);
+  const recipeDataRef = useRef(null);
+  const isAutoAnalysisActive = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    setRecipeData({
-      name: 'Insalata Mediterranea Sostenibile',
-      carbon_footprint: '2.3 kg CO₂e per porzione',
-      water_footprint: '120 L di acqua',
-      calories: 420,
-      ingredients: [
-        { name: 'Ceci cotti', quantity: '150 g' },
-        { name: 'Pomodorini', quantity: '120 g' },
-        { name: 'Cetriolo', quantity: '80 g' },
-        { name: 'Olive nere', quantity: '30 g' },
-        { name: 'Olio extravergine di oliva', quantity: '1 cucchiaio' },
-        { name: 'Succo di limone', quantity: '1 cucchiaio' },
-        { name: 'Origano fresco', quantity: '1 cucchiaino' }
-      ],
-      instructions: 'Mescola tutti gli ingredienti in una ciotola capiente e condisci con olio, limone e origano. Servi fresca.'
-    });
+    let isMounted = true;
+
+    const pollIframe = async () => {
+      const newData = await extractRecipeDataFromIframe();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (newData) {
+        setIsIframeLive(true);
+
+        const previousData = recipeDataRef.current;
+        const normalizedData = {
+          ...newData,
+          metadata: {
+            ...newData.metadata,
+            creation_date: previousData?.metadata?.creation_date || newData.metadata.creation_date
+          }
+        };
+
+        const hasChanged = JSON.stringify(previousData) !== JSON.stringify(normalizedData);
+
+        if (hasChanged) {
+          recipeDataRef.current = normalizedData;
+          setRecipeData(normalizedData);
+          console.log('SFE data aggiornata:', normalizedData);
+        }
+      } else {
+        setIsIframeLive(false);
+      }
+    };
+
+    const interval = setInterval(pollIframe, 5000);
+
+    pollIframe();
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const callChatGPT = async (recipeJson, userMessage) => {
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipeJson, message: userMessage }),
-    });
+  const callChatGPT = useCallback(async (recipeJson, userMessage) => {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeJson, message: userMessage })
+      });
 
-    if (!res.ok) {
-      console.error("Errore nella risposta dell’API:", res.statusText);
-      return "Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.";
+      if (!res.ok) {
+        console.error('Errore nella risposta dell’API:', res.statusText);
+        return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
+      }
+
+      const data = await res.json();
+      return data.reply || 'Nessuna risposta da Swifty.';
+    } catch (error) {
+      console.error('Errore nella chiamata a /api/chat:', error);
+      return 'Si è verificato un errore di rete. Controlla la connessione e riprova.';
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!recipeData || isAutoAnalysisActive.current) {
+      return;
     }
 
-    const data = await res.json();
-    return data.reply || "Nessuna risposta da Swifty.";
-  } catch (error) {
-    console.error("Errore nella chiamata a /api/chat:", error);
-    return "Si è verificato un errore di rete. Controlla la connessione e riprova.";
-  }
-};
+    let isCancelled = false;
+
+    const triggerAutoAnalysis = async () => {
+      isAutoAnalysisActive.current = true;
+
+      try {
+        const reply = await callChatGPT(
+          recipeData,
+          'Analizza la ricetta attuale e suggerisci miglioramenti in termini di sostenibilità e valori nutrizionali.'
+        );
+
+        if (!isCancelled) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              sender: 'swifty',
+              text: reply
+            }
+          ]);
+        }
+      } finally {
+        isAutoAnalysisActive.current = false;
+      }
+    };
+
+    triggerAutoAnalysis();
+
+    return () => {
+      isCancelled = true;
+      isAutoAnalysisActive.current = false;
+    };
+  }, [callChatGPT, recipeData]);
 
   const handleSend = async () => {
     const trimmedMessage = inputValue.trim();
@@ -118,7 +322,8 @@ export default function App() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      {/* Chatbot flottante */}      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+      {/* Chatbot flottante */}
+      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
         {isChatOpen && (
           <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
             {/* Header */}
@@ -128,7 +333,12 @@ export default function App() {
                   S
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">Swifty</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-white">Swifty</h1>
+                    <span className={`text-xs ${isIframeLive ? 'text-green-300' : 'text-red-300'}`}>
+                      {isIframeLive ? '🟢 live' : '🔴 offline'}
+                    </span>
+                  </div>
                   <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
                 </div>
               </div>
