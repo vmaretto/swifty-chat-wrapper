@@ -107,8 +107,6 @@ export default function App() {
     }
   };
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
-
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
       {/* Iframe - Occupa l'intera area */}
@@ -120,8 +118,7 @@ export default function App() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      {/* Chatbot flottante */}
-      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+      {/* Chatbot flottante */}      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
         {isChatOpen && (
           <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
             {/* Header */}
