@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+if (typeof window !== 'undefined' && !window.describeIframeError) {
+  window.describeIframeError = () => '';
+}
+
 async function callChatGPT(recipeJson, userMessage) {
   const res = await fetch('/api/chat', {
     method: 'POST',
