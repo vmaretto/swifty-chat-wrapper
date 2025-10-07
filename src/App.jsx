@@ -1,6 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+async function callChatGPT(recipeJson, userMessage) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipeJson, message: userMessage })
+  });
 
+  if (!res.ok) {
+    console.error('Errore nella risposta dell’API:', res.statusText);
+    return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
+  }
+
+  const data = await res.json();
+  return data.reply || 'Nessuna risposta da Swifty.';
+}
 
 export default function App() {
   const [messages, setMessages] = useState([
@@ -20,50 +34,57 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    setRecipeData({
-      name: 'Insalata Mediterranea Sostenibile',
-      carbon_footprint: '2.3 kg CO₂e per porzione',
-      water_footprint: '120 L di acqua',
-      calories: 420,
-      ingredients: [
-        { name: 'Ceci cotti', quantity: '150 g' },
-        { name: 'Pomodorini', quantity: '120 g' },
-        { name: 'Cetriolo', quantity: '80 g' },
-        { name: 'Olive nere', quantity: '30 g' },
-        { name: 'Olio extravergine di oliva', quantity: '1 cucchiaio' },
-        { name: 'Succo di limone', quantity: '1 cucchiaio' },
-        { name: 'Origano fresco', quantity: '1 cucchiaino' }
-      ],
-      instructions: 'Mescola tutti gli ingredienti in una ciotola capiente e condisci con olio, limone e origano. Servi fresca.'
-    });
-  }, []);
+  const handleFileUpload = (event) => {
+    const file = event.target.files?.[0];
 
-  const callChatGPT = async (recipeJson, userMessage) => {
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipeJson, message: userMessage }),
-    });
-
-    if (!res.ok) {
-      console.error("Errore nella risposta dell’API:", res.statusText);
-      return "Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.";
+    if (!file) {
+      return;
     }
 
-    const data = await res.json();
-    return data.reply || "Nessuna risposta da Swifty.";
-  } catch (error) {
-    console.error("Errore nella chiamata a /api/chat:", error);
-    return "Si è verificato un errore di rete. Controlla la connessione e riprova.";
-  }
-};
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result ?? '');
+        setRecipeData(jsonData);
+
+        const recipeName = jsonData?.metadata?.name || 'Senza nome';
+        const servings =
+          jsonData?.metadata?.servings ??
+          jsonData?.metadata?.portions ??
+          jsonData?.servings ??
+          jsonData?.portions ??
+          1;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            sender: 'swifty',
+            text: `✅ Ricetta caricata correttamente: ${recipeName} (${servings} porzioni)`
+          }
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            sender: 'swifty',
+            text: '⚠️ Errore: il file non è un JSON valido.'
+          }
+        ]);
+      }
+    };
+
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 
   const handleSend = async () => {
     const trimmedMessage = inputValue.trim();
 
-    if (trimmedMessage === '') return;
+    if (trimmedMessage === '') {
+      return;
+    }
 
     const userMessage = {
       id: Date.now(),
@@ -109,7 +130,6 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
-      {/* Iframe - Occupa l'intera area */}
       <iframe
         src="https://switch-food-explorer.posti.world/recipe-creation"
         className="absolute inset-0 h-full w-full border-0"
@@ -118,10 +138,9 @@ export default function App() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      {/* Chatbot flottante */}      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
         {isChatOpen && (
           <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
-            {/* Header */}
             <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-5 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-600 shadow-md">
@@ -141,25 +160,23 @@ export default function App() {
               </button>
             </div>
 
-            {/* Messages Area */}
             <div className="flex h-96 flex-col bg-stone-50">
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                        msg.sender === 'user'
-                          ? 'rounded-br-sm bg-emerald-500 text-white'
-                          : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800 shadow-sm'
-                      }`}
-                    >
-                      <p className="text-sm leading-relaxed">{msg.text}</p>
+                {messages.map((msg) => {
+                  const isUser = msg.sender === 'user';
+                  const rowAlignment = isUser ? 'justify-end' : 'justify-start';
+                  const bubbleVariant = isUser
+                    ? 'rounded-br-sm bg-emerald-500 text-white'
+                    : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800 shadow-sm';
+
+                  return (
+                    <div key={msg.id} className={`flex ${rowAlignment}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${bubbleVariant}`}>
+                        <p className="text-sm leading-relaxed">{msg.text}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {isTyping && (
                   <div className="flex justify-start">
@@ -176,24 +193,56 @@ export default function App() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input Area */}
               <div className="border-t border-stone-200 bg-white p-4">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Scrivi un messaggio..."
-                    className="flex-1 rounded-xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                  <button
-                    onClick={handleSend}
-                    disabled={inputValue.trim() === ''}
-                    className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Invia
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2 items-center">
+                    <label
+                      htmlFor="fileUpload"
+                      className="flex items-center justify-center rounded-xl border border-emerald-500 text-emerald-600 px-4 py-3 text-sm font-medium cursor-pointer hover:bg-emerald-50 transition"
+                    >
+                      📎 Allega ricetta
+                    </label>
+                    <input
+                      id="fileUpload"
+                      type="file"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <span className="text-xs text-stone-500">
+                      {recipeData ? 'Ricetta caricata' : 'Nessuna ricetta'}
+                    </span>
+
+                    <input
+                      type="text"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Scrivi un messaggio..."
+                      className="flex-1 rounded-xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+
+                    <button
+                      onClick={handleSend}
+                      disabled={inputValue.trim() === ''}
+                      className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Invia
+                    </button>
+                  </div>
+
+                  {recipeData && (
+                    <div className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg mt-1 p-2 max-h-24 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap text-[11px]">
+                        {JSON.stringify(recipeData.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
+                  {recipeData ? (
+                    <p className="text-xs text-emerald-600">🟢 Ricetta caricata</p>
+                  ) : (
+                    <p className="text-xs text-stone-400">Nessuna ricetta allegata</p>
+                  )}
                 </div>
               </div>
             </div>
