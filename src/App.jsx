@@ -2,64 +2,141 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function App() {
   const [messages, setMessages] = useState([
-    { 
-      id: 1, 
-      sender: 'swifty', 
-      text: 'Ciao! Sono Swifty, il tuo assistente per Switch Food Explorer. Come posso aiutarti oggi?' 
+    {
+      id: 1,
+      sender: 'swifty',
+      text: 'Ciao! Sono Swifty, il tuo assistente per Switch Food Explorer. Come posso aiutarti oggi?'
     }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [recipeData, setRecipeData] = useState(null);
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const generateResponse = (userMessage) => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes('ricetta') || lowerMessage.includes('recipe')) {
-      return 'Puoi creare ricette personalizzate usando il form sulla pagina! Basta compilare gli ingredienti e le istruzioni. Vuoi che ti guidi passo dopo passo?';
-    } else if (lowerMessage.includes('ingredienti') || lowerMessage.includes('ingredients')) {
-      return 'Gli ingredienti possono essere aggiunti uno alla volta. Ricorda di specificare le quantità per ottenere calcoli nutrizionali accurati!';
-    } else if (lowerMessage.includes('aiuto') || lowerMessage.includes('help')) {
-      return 'Sono qui per aiutarti con Switch Food Explorer! Posso rispondere a domande su ricette, ingredienti, valori nutrizionali e molto altro. Cosa ti serve?';
-    } else if (lowerMessage.includes('ciao') || lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return 'Ciao! Benvenuto su Switch Food Explorer. Posso aiutarti a creare ricette gustose e salutari!';
-    } else if (lowerMessage.includes('grazie') || lowerMessage.includes('thanks')) {
-      return 'Prego! Sono sempre qui se hai bisogno di altro aiuto.';
-    } else {
-      return 'Capisco la tua domanda. Prova a usare il form sulla pagina per esplorare le funzionalità di Switch Food Explorer. Se hai bisogno di assistenza specifica, chiedi pure!';
+  useEffect(() => {
+    setRecipeData({
+      name: 'Insalata Mediterranea Sostenibile',
+      carbon_footprint: '2.3 kg CO₂e per porzione',
+      water_footprint: '120 L di acqua',
+      calories: 420,
+      ingredients: [
+        { name: 'Ceci cotti', quantity: '150 g' },
+        { name: 'Pomodorini', quantity: '120 g' },
+        { name: 'Cetriolo', quantity: '80 g' },
+        { name: 'Olive nere', quantity: '30 g' },
+        { name: 'Olio extravergine di oliva', quantity: '1 cucchiaio' },
+        { name: 'Succo di limone', quantity: '1 cucchiaio' },
+        { name: 'Origano fresco', quantity: '1 cucchiaino' }
+      ],
+      instructions: 'Mescola tutti gli ingredienti in una ciotola capiente e condisci con olio, limone e origano. Servi fresca.'
+    });
+  }, []);
+
+  const callChatGPT = async (recipeJson, userMessage) => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('OpenAI API key non configurata. Aggiungi VITE_OPENAI_API_KEY alle variabili di ambiente.');
+      return 'Al momento non riesco a collegarmi a ChatGPT perché manca la chiave API. Verifica la configurazione e riprova.';
+    }
+
+    const messagesPayload = [
+      {
+        role: 'system',
+        content:
+          'Sei Swifty, un assistente gentile e competente per Switch Food Explorer. Usa i dati forniti per dare consigli su sostenibilità, ingredienti e ricette. Rispondi sempre in italiano.'
+      },
+      {
+        role: 'user',
+        content: `Dati della ricetta in JSON:\n${JSON.stringify(recipeJson ?? {}, null, 2)}\n\nDomanda dell\'utente: ${userMessage}\n\nFornisci una risposta chiara e pratica.`
+      }
+    ];
+
+    const fetchCompletion = async (model) => {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: messagesPayload,
+          temperature: 0.6
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage = data?.error?.message ?? `La richiesta al modello ${model} non è andata a buon fine.`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.model = model;
+        error.details = data;
+        throw error;
+      }
+
+      return data?.choices?.[0]?.message?.content?.trim() ?? 'Non ho ricevuto una risposta utile da ChatGPT in questo momento.';
+    };
+
+    try {
+      return await fetchCompletion('gpt-4o-mini');
+    } catch (error) {
+      console.warn('Errore chiamando gpt-4o-mini:', error);
+
+      try {
+        return await fetchCompletion('gpt-4-turbo');
+      } catch (fallbackError) {
+        console.warn('Errore chiamando gpt-4-turbo:', fallbackError);
+        return 'Al momento non riesco a contattare ChatGPT. Riprova più tardi o verifica la connessione.';
+      }
     }
   };
 
-  const handleSend = () => {
-    if (inputValue.trim() === '') return;
+  const handleSend = async () => {
+    const trimmedMessage = inputValue.trim();
+
+    if (trimmedMessage === '') return;
 
     const userMessage = {
       id: Date.now(),
       sender: 'user',
-      text: inputValue
+      text: trimmedMessage
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const reply = await callChatGPT(recipeData, trimmedMessage);
+
       const botResponse = {
         id: Date.now() + 1,
         sender: 'swifty',
-        text: generateResponse(inputValue)
+        text: reply
       };
-      setMessages(prev => [...prev, botResponse]);
+
+      setMessages((prev) => [...prev, botResponse]);
+    } catch (error) {
+      console.warn('Errore inatteso durante la chiamata a ChatGPT:', error);
+
+      const fallbackResponse = {
+        id: Date.now() + 1,
+        sender: 'swifty',
+        text: 'Si è verificato un problema inatteso durante la chiamata a ChatGPT. Per favore riprova più tardi.'
+      };
+
+      setMessages((prev) => [...prev, fallbackResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -130,9 +207,9 @@ export default function App() {
                   <div className="flex justify-start">
                     <div className="rounded-2xl rounded-bl-sm border border-stone-200 bg-white px-4 py-3 text-stone-800 shadow-sm">
                       <div className="flex gap-1">
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '0ms' }}></span>
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '150ms' }}></span>
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '300ms' }}></span>
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '0ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '150ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-400" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
                   </div>
