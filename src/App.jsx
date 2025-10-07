@@ -32,7 +32,20 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [recipeData, setRecipeData] = useState(null);
+  const [recipeSource, setRecipeSource] = useState(null);
+  const [isIframeLive, setIsIframeLive] = useState(false);
+  const [iframeError, setIframeError] = useState(null);
   const messagesEndRef = useRef(null);
+  const recipeDataRef = useRef(null);
+  const isAutoAnalysisActive = useRef(false);
+  const lastIframeErrorType = useRef(null);
+
+  const iframeStatus = iframeError
+    ? { label: '⚠️ errore', className: 'text-amber-200' }
+    : isIframeLive
+    ? { label: '🟢 live', className: 'text-green-300' }
+    : { label: '🔴 offline', className: 'text-red-300' };
+  const iframeErrorMessage = describeIframeError(iframeError);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,7 +162,12 @@ export default function App() {
                   S
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">Swifty</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-white">Swifty</h1>
+                    <span className={`text-xs ${iframeStatus.className}`}>
+                      {iframeStatus.label}
+                    </span>
+                  </div>
                   <p className="text-xs text-emerald-50">Chat Assistant per Switch Food Explorer</p>
                 </div>
               </div>
