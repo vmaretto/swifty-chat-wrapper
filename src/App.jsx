@@ -87,7 +87,7 @@ export default function App() {
       console.error('Errore nella risposta dell’API:', res.statusText);
       return 'Non riesco a contattare ChatGPT in questo momento. Riprova più tardi.';
     }
-  }, []);
+  }
 
     const data = await res.json();
     return data.reply || 'Nessuna risposta da Swifty.';
