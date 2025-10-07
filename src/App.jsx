@@ -147,13 +147,11 @@ export default function App() {
         src="https://switch-food-explorer.posti.world/recipe-creation"
         className="absolute inset-0 h-full w-full border-0"
         title="Switch Food Explorer"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
 
-      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-4">
+      <div className="absolute bottom-6 right-6 flex flex-col items-end gap-4">
         {isChatOpen && (
-          <div className="pointer-events-auto w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
+          <div className="w-80 sm:w-96 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
             <div className="bg-gradient-to-r from-emerald-400 to-green-500 px-5 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-600 shadow-md">
@@ -270,7 +268,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => setIsChatOpen((prev) => !prev)}
-          className="pointer-events-auto flex items-center gap-3 rounded-full bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-xl transition hover:bg-emerald-600"
+          className="flex items-center gap-3 rounded-full bg-emerald-500 px-5 py-3 text-sm font-medium text-white shadow-xl transition hover:bg-emerald-600"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-base font-bold text-emerald-600 shadow">
             S
