@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "^/api/switch/.*", "dest": "/api/switch/[...path].js" },
+    { "src": "^/switch/(.*)$", "dest": "/api/switch/$1" },
+    { "src": "/(.*)", "dest": "/" }
+  ]
+}
