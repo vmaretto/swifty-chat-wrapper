@@ -111,4 +111,14 @@ Finché resti sul branch secondario, il branch `main` rimane pulito: puoi cambia
   (Attenzione: cancella tutte le modifiche locali.)
 - **Serve reinstallare le dipendenze?** Puoi ripetere `npm install` in qualsiasi momento; se qualcosa va storto elimina la cartella `node_modules` e lancia di nuovo `npm install`.
 
+## 9. Accesso a Switch Food Explorer
+Il flusso di autenticazione di Switch Food Explorer reindirizza al dominio `dam-switchproject.posti.world`, che impone le intestazioni di sicurezza `X-Frame-Options`/`frame-ancestors`. Per questo motivo la pagina di login non viene caricata dentro l'iframe dell'app: il browser mostra un riquadro vuoto e impedisce l'esecuzione di qualsiasi script.
+
+Quando l'app rileva questo blocco, mostra un messaggio fisso con due opzioni:
+
+- **Apri in nuova scheda**: si apre `https://switch-food-explorer.posti.world/recipe-creation` in un'altra scheda del browser, dove puoi completare il login.
+- **Riprova**: ricarica l'iframe interno con la pagina principale dell'esploratore. Usa questa opzione dopo aver effettuato l'accesso nella nuova scheda.
+
+Questo è il comportamento previsto: al momento non è possibile aggirare le intestazioni di sicurezza del dominio di autenticazione, quindi l'apertura in una nuova scheda rappresenta la soluzione consigliata.
+
 Seguendo questi passaggi puoi provare ogni modifica in locale, in modo sicuro e senza toccare il repository remoto.

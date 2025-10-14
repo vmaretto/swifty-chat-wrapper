@@ -1,29 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-if (typeof window !== 'undefined' && !window.describeIframeError) {
-  const emitIframeAuthEvent = (eventName, detail) => {
-    window.dispatchEvent(new CustomEvent(eventName, { detail }));
-  };
-
-  window.describeIframeError = (reason) => {
-    const code = typeof reason === 'string' ? reason.toLowerCase() : '';
-    let message = '';
-
-    if (code.includes('login')) {
-      message = 'Per completare l\'accesso apri Switch Food Explorer in una nuova scheda.';
-    } else if (code.includes('auth') || code.includes('session')) {
-      message = 'Per motivi di sicurezza l\'area di autenticazione non è disponibile nell\'iframe.';
-    }
-
-    if (message) {
-      emitIframeAuthEvent('iframe-auth-error', { reason, message });
-    } else {
-      emitIframeAuthEvent('iframe-auth-error-cleared', { reason });
-    }
-
-    return message;
-  };
-}
+const IFRAME_URL = 'https://switch-food-explorer.posti.world/recipe-creation';
+const IFRAME_BLOCK_MESSAGE =
+  "L'area di autenticazione di Switch Food Explorer non può essere caricata dentro un iframe. Apri la pagina in una nuova scheda per accedere e poi torna qui.";
 
 async function callChatGPT(recipeJson, userMessage) {
   const res = await fetch('/api/chat', {
@@ -55,13 +34,16 @@ export default function App() {
   const [recipeData, setRecipeData] = useState(null);
   const [recipeSource, setRecipeSource] = useState(null);
   const [isIframeLive, setIsIframeLive] = useState(false);
+  const [iframeBlocked, setIframeBlocked] = useState(false);
   const [iframeErrorMessage, setIframeErrorMessage] = useState('');
+  const iframeRef = useRef(null);
+  const iframeLoadTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const recipeDataRef = useRef(null);
   const isAutoAnalysisActive = useRef(false);
 
-  const iframeStatus = iframeErrorMessage
-    ? { label: '⚠️ errore', className: 'text-amber-200' }
+  const iframeStatus = iframeBlocked
+    ? { label: '⚠️ bloccato', className: 'text-amber-200' }
     : isIframeLive
     ? { label: '🟢 live', className: 'text-green-300' }
     : { label: '🔴 offline', className: 'text-red-300' };
@@ -70,41 +52,99 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const clearIframeWatchdog = useCallback(() => {
+    if (iframeLoadTimeoutRef.current) {
+      window.clearTimeout(iframeLoadTimeoutRef.current);
+      iframeLoadTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startIframeWatchdog = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    clearIframeWatchdog();
+    setIframeBlocked(false);
+    setIframeErrorMessage('');
+    setIsIframeLive(false);
+
+    iframeLoadTimeoutRef.current = window.setTimeout(() => {
+      setIframeBlocked(true);
+      setIframeErrorMessage(IFRAME_BLOCK_MESSAGE);
+      setIsIframeLive(false);
+    }, 4500);
+  }, [clearIframeWatchdog]);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
     }
 
-    const handleIframeAuthError = (event) => {
-      const message = event.detail?.message ?? '';
+    let observer;
+    let rafId = 0;
+    let cancelled = false;
 
-      if (message) {
-        setIframeErrorMessage(message);
-        setIsIframeLive(false);
+    const setupObserver = () => {
+      if (cancelled) {
+        return;
       }
+
+      const iframeElement = iframeRef.current;
+
+      if (!iframeElement) {
+        rafId = window.requestAnimationFrame(setupObserver);
+        return;
+      }
+
+      startIframeWatchdog();
+
+      observer = new MutationObserver(() => {
+        startIframeWatchdog();
+      });
+
+      observer.observe(iframeElement, { attributes: true, attributeFilter: ['src'] });
     };
 
-    const handleIframeAuthErrorCleared = () => {
-      setIframeErrorMessage('');
-      setIsIframeLive(true);
-    };
-
-    window.addEventListener('iframe-auth-error', handleIframeAuthError);
-    window.addEventListener('iframe-auth-error-cleared', handleIframeAuthErrorCleared);
+    setupObserver();
 
     return () => {
-      window.removeEventListener('iframe-auth-error', handleIframeAuthError);
-      window.removeEventListener('iframe-auth-error-cleared', handleIframeAuthErrorCleared);
-    };
-  }, []);
+      cancelled = true;
 
-  const handleDismissIframeError = () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      observer?.disconnect();
+      clearIframeWatchdog();
+    };
+  }, [startIframeWatchdog, clearIframeWatchdog]);
+
+  const handleIframeLoad = () => {
+    clearIframeWatchdog();
+    setIsIframeLive(true);
+    setIframeBlocked(false);
     setIframeErrorMessage('');
   };
 
-  const handleIframeLoad = () => {
-    setIsIframeLive(true);
-    setIframeErrorMessage('');
+  const handleOpenInNewTab = () => {
+    if (typeof window !== 'undefined') {
+      window.open(IFRAME_URL, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleRetry = () => {
+    startIframeWatchdog();
+
+    const iframeElement = iframeRef.current;
+
+    if (iframeElement) {
+      try {
+        iframeElement.src = IFRAME_URL;
+      } catch (error) {
+        console.warn('Impossibile reimpostare l\'URL dell\'iframe:', error);
+      }
+    }
   };
 
   const handleFileUpload = (event) => {
@@ -203,26 +243,38 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
-      {iframeErrorMessage && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center p-4">
+      {iframeBlocked && (
+        <div className="absolute inset-x-0 top-0 z-20 flex justify-center p-4">
           <div
-            className="pointer-events-auto flex max-w-xl items-start gap-3 rounded-2xl bg-amber-50/95 p-4 text-sm text-amber-900 shadow-lg backdrop-blur"
+            className="flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50/95 p-5 text-sm text-amber-900 shadow-lg backdrop-blur"
             role="alert"
             aria-live="assertive"
           >
-            <div className="flex-1 leading-relaxed">{iframeErrorMessage}</div>
-            <button
-              type="button"
-              onClick={handleDismissIframeError}
-              className="ml-2 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:bg-amber-100"
-            >
-              Chiudi
-            </button>
+            <div className="leading-relaxed">
+              {iframeErrorMessage || IFRAME_BLOCK_MESSAGE}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleOpenInNewTab}
+                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-50 transition hover:bg-amber-700"
+              >
+                Apri in nuova scheda
+              </button>
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="rounded-xl border border-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-700 transition hover:bg-amber-100"
+              >
+                Riprova
+              </button>
+            </div>
           </div>
         </div>
       )}
       <iframe
-        src="https://switch-food-explorer.posti.world/recipe-creation"
+        ref={iframeRef}
+        src={IFRAME_URL}
         className="absolute inset-0 h-full w-full border-0"
         title="Switch Food Explorer"
         onLoad={handleIframeLoad}
