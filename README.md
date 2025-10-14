@@ -112,13 +112,22 @@ Finché resti sul branch secondario, il branch `main` rimane pulito: puoi cambia
 - **Serve reinstallare le dipendenze?** Puoi ripetere `npm install` in qualsiasi momento; se qualcosa va storto elimina la cartella `node_modules` e lancia di nuovo `npm install`.
 
 ## 9. Accesso a Switch Food Explorer
-Il flusso di autenticazione di Switch Food Explorer reindirizza al dominio `dam-switchproject.posti.world`, che impone le intestazioni di sicurezza `X-Frame-Options`/`frame-ancestors`. Per questo motivo la pagina di login non viene caricata dentro l'iframe dell'app: il browser mostra un riquadro vuoto e impedisce l'esecuzione di qualsiasi script.
+Il flusso di autenticazione di Switch Food Explorer reindirizza a domini che impostano intestazioni di sicurezza molto restrittive. Per evitare schermate vuote o errori di caricamento, l'applicazione integra un proxy lato Vercel che rimuove le intestazioni bloccanti e mantiene attiva la sessione durante i redirect.
 
-Quando l'app rileva questo blocco, mostra un messaggio fisso con due opzioni:
+Quando l'app rileva comunque un problema di caricamento (ad esempio se l'autenticazione richiede un passaggio manuale), mostra un banner con due opzioni:
 
-- **Apri in nuova scheda**: si apre `https://switch-food-explorer.posti.world/recipe-creation` in un'altra scheda del browser, dove puoi completare il login.
-- **Riprova**: ricarica l'iframe interno con la pagina principale dell'esploratore. Usa questa opzione dopo aver effettuato l'accesso nella nuova scheda.
-
-Questo è il comportamento previsto: al momento non è possibile aggirare le intestazioni di sicurezza del dominio di autenticazione, quindi l'apertura in una nuova scheda rappresenta la soluzione consigliata.
+- **Apri in nuova scheda**: apre Switch Food Explorer in una scheda separata del browser.
+- **Riprova**: ricarica l'iframe interno dopo aver completato l'accesso.
 
 Seguendo questi passaggi puoi provare ogni modifica in locale, in modo sicuro e senza toccare il repository remoto.
+
+### 🔄 Proxy di autenticazione per Switch Food Explorer
+
+L’app utilizza una route proxy (`/api/switch`) per incorporare Switch Food Explorer all’interno dell’iframe. Il proxy:
+
+- rimuove gli header X-Frame-Options e CSP che impediscono l’embedding,
+- riscrive i cookie con `SameSite=None; Secure`,
+- segue i redirect di autenticazione,
+- e gestisce lo streaming completo di tutte le risorse (HTML, JS, CSS, immagini).
+
+Non sono necessarie modifiche lato Switch Food Explorer.
