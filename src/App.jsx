@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+
 async function callChatGPT(recipeJson, userMessage) {
   const res = await fetch('/api/chat', {
     method: 'POST',
