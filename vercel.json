@@ -1,8 +1,28 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/switch/[...path].js",
+      "use": "@vercel/edge-functions"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build"
+    }
+  ],
   "routes": [
-    { "src": "^/api/switch/.*", "dest": "/api/switch/[...path].js" },
-    { "src": "^/switch/(.*)$", "dest": "/api/switch/$1" },
-    { "src": "/(.*)", "dest": "/" }
-  ]
+    {
+      "src": "^/api/switch/.*",
+      "dest": "/api/switch/[...path].js"
+    },
+    {
+      "src": "^/switch/(.*)$",
+      "dest": "/api/switch/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/"
+    }
+  ],
+  "outputDirectory": "dist"
 }
