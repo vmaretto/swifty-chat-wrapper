@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 // App embeds Switch Food Explorer and includes a local watchdog to surface
 // iframe load failures caused by X-Frame-Options or CSP restrictions.
 
-const IFRAME_URL = 'https://switch-food-explorer.posti.world/recipe-creation';
+const IFRAME_URL = '/api/switch/recipe-creation';
 const IFRAME_BLOCK_MESSAGE =
   "L'area di autenticazione di Switch Food Explorer non può essere caricata dentro un iframe. Apri la pagina in una nuova scheda per accedere e poi torna qui.";
 
