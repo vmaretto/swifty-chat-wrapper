@@ -1,10 +1,11 @@
 {
   "version": 2,
+  "functions": {
+    "api/switch/[...path].js": {
+      "runtime": "edge"
+    }
+  },
   "builds": [
-    {
-      "src": "api/switch/[...path].js",
-      "use": "@vercel/edge-functions"
-    },
     {
       "src": "package.json",
       "use": "@vercel/static-build"
