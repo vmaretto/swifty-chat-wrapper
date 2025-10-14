@@ -1,18 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 if (typeof window !== 'undefined' && !window.describeIframeError) {
+  const emitIframeAuthEvent = (eventName, detail) => {
+    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+  };
+
   window.describeIframeError = (reason) => {
     const code = typeof reason === 'string' ? reason.toLowerCase() : '';
+    let message = '';
 
     if (code.includes('login')) {
-      return 'Per completare l\'accesso apri Switch Food Explorer in una nuova scheda.';
+      message = 'Per completare l\'accesso apri Switch Food Explorer in una nuova scheda.';
+    } else if (code.includes('auth') || code.includes('session')) {
+      message = 'Per motivi di sicurezza l\'area di autenticazione non è disponibile nell\'iframe.';
     }
 
-    if (code.includes('auth') || code.includes('session')) {
-      return 'Per motivi di sicurezza l\'area di autenticazione non è disponibile nell\'iframe.';
+    if (message) {
+      emitIframeAuthEvent('iframe-auth-error', { reason, message });
+    } else {
+      emitIframeAuthEvent('iframe-auth-error-cleared', { reason });
     }
 
-    return '';
+    return message;
   };
 }
 
@@ -46,22 +55,57 @@ export default function App() {
   const [recipeData, setRecipeData] = useState(null);
   const [recipeSource, setRecipeSource] = useState(null);
   const [isIframeLive, setIsIframeLive] = useState(false);
-  const [iframeError, setIframeError] = useState(null);
+  const [iframeErrorMessage, setIframeErrorMessage] = useState('');
   const messagesEndRef = useRef(null);
   const recipeDataRef = useRef(null);
   const isAutoAnalysisActive = useRef(false);
-  const lastIframeErrorType = useRef(null);
 
-  const iframeStatus = iframeError
+  const iframeStatus = iframeErrorMessage
     ? { label: '⚠️ errore', className: 'text-amber-200' }
     : isIframeLive
     ? { label: '🟢 live', className: 'text-green-300' }
     : { label: '🔴 offline', className: 'text-red-300' };
-  const iframeErrorMessage = describeIframeError(iframeError);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleIframeAuthError = (event) => {
+      const message = event.detail?.message ?? '';
+
+      if (message) {
+        setIframeErrorMessage(message);
+        setIsIframeLive(false);
+      }
+    };
+
+    const handleIframeAuthErrorCleared = () => {
+      setIframeErrorMessage('');
+      setIsIframeLive(true);
+    };
+
+    window.addEventListener('iframe-auth-error', handleIframeAuthError);
+    window.addEventListener('iframe-auth-error-cleared', handleIframeAuthErrorCleared);
+
+    return () => {
+      window.removeEventListener('iframe-auth-error', handleIframeAuthError);
+      window.removeEventListener('iframe-auth-error-cleared', handleIframeAuthErrorCleared);
+    };
+  }, []);
+
+  const handleDismissIframeError = () => {
+    setIframeErrorMessage('');
+  };
+
+  const handleIframeLoad = () => {
+    setIsIframeLive(true);
+    setIframeErrorMessage('');
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files?.[0];
@@ -159,10 +203,29 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
+      {iframeErrorMessage && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center p-4">
+          <div
+            className="pointer-events-auto flex max-w-xl items-start gap-3 rounded-2xl bg-amber-50/95 p-4 text-sm text-amber-900 shadow-lg backdrop-blur"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex-1 leading-relaxed">{iframeErrorMessage}</div>
+            <button
+              type="button"
+              onClick={handleDismissIframeError}
+              className="ml-2 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:bg-amber-100"
+            >
+              Chiudi
+            </button>
+          </div>
+        </div>
+      )}
       <iframe
         src="https://switch-food-explorer.posti.world/recipe-creation"
         className="absolute inset-0 h-full w-full border-0"
         title="Switch Food Explorer"
+        onLoad={handleIframeLoad}
       />
 
       <div className="absolute bottom-6 right-6 flex flex-col items-end gap-4">
