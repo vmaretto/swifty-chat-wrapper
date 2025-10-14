@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+// App embeds Switch Food Explorer and includes a local watchdog to surface
+// iframe load failures caused by X-Frame-Options or CSP restrictions.
+
 const IFRAME_URL = 'https://switch-food-explorer.posti.world/recipe-creation';
 const IFRAME_BLOCK_MESSAGE =
   "L'area di autenticazione di Switch Food Explorer non può essere caricata dentro un iframe. Apri la pagina in una nuova scheda per accedere e poi torna qui.";
@@ -37,7 +40,7 @@ export default function App() {
   const [iframeBlocked, setIframeBlocked] = useState(false);
   const [iframeErrorMessage, setIframeErrorMessage] = useState('');
   const iframeRef = useRef(null);
-  const iframeLoadTimeoutRef = useRef(null);
+  const iframeWatchdogRef = useRef(null);
   const messagesEndRef = useRef(null);
   const recipeDataRef = useRef(null);
   const isAutoAnalysisActive = useRef(false);
@@ -52,79 +55,63 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const clearIframeWatchdog = useCallback(() => {
-    if (iframeLoadTimeoutRef.current) {
-      window.clearTimeout(iframeLoadTimeoutRef.current);
-      iframeLoadTimeoutRef.current = null;
-    }
-  }, []);
-
   const startIframeWatchdog = useCallback(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    clearIframeWatchdog();
-    setIframeBlocked(false);
-    setIframeErrorMessage('');
-    setIsIframeLive(false);
-
-    iframeLoadTimeoutRef.current = window.setTimeout(() => {
-      setIframeBlocked(true);
-      setIframeErrorMessage(IFRAME_BLOCK_MESSAGE);
-      setIsIframeLive(false);
-    }, 4500);
-  }, [clearIframeWatchdog]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
+    if (iframeWatchdogRef.current) {
+      window.clearTimeout(iframeWatchdogRef.current);
+      iframeWatchdogRef.current = null;
     }
 
-    let observer;
-    let rafId = 0;
-    let cancelled = false;
+    const iframeElement = iframeRef.current;
 
-    const setupObserver = () => {
-      if (cancelled) {
-        return;
+    if (!iframeElement) {
+      return;
+    }
+
+    iframeWatchdogRef.current = window.setTimeout(() => {
+      let isBlocked = false;
+
+      try {
+        const iframeDoc = iframeElement.contentDocument || iframeElement.contentWindow?.document;
+        const iframeBody = iframeDoc?.body;
+
+        if (!iframeDoc || !iframeBody || iframeBody.innerHTML.trim() === '') {
+          isBlocked = true;
+        }
+      } catch (error) {
+        isBlocked = true;
       }
 
-      const iframeElement = iframeRef.current;
-
-      if (!iframeElement) {
-        rafId = window.requestAnimationFrame(setupObserver);
-        return;
+      if (isBlocked) {
+        setIframeBlocked(true);
+        setIframeErrorMessage(IFRAME_BLOCK_MESSAGE);
+        setIsIframeLive(false);
+      } else {
+        setIframeBlocked(false);
+        setIframeErrorMessage('');
+        setIsIframeLive(true);
       }
+      iframeWatchdogRef.current = null;
+    }, 1500);
+  }, []);
 
-      startIframeWatchdog();
-
-      observer = new MutationObserver(() => {
-        startIframeWatchdog();
-      });
-
-      observer.observe(iframeElement, { attributes: true, attributeFilter: ['src'] });
-    };
-
-    setupObserver();
-
+  useEffect(() => {
     return () => {
-      cancelled = true;
-
-      if (rafId) {
-        window.cancelAnimationFrame(rafId);
+      if (iframeWatchdogRef.current) {
+        window.clearTimeout(iframeWatchdogRef.current);
+        iframeWatchdogRef.current = null;
       }
-
-      observer?.disconnect();
-      clearIframeWatchdog();
     };
-  }, [startIframeWatchdog, clearIframeWatchdog]);
+  }, []);
 
   const handleIframeLoad = () => {
-    clearIframeWatchdog();
-    setIsIframeLive(true);
+    setIsIframeLive(false);
     setIframeBlocked(false);
     setIframeErrorMessage('');
+    startIframeWatchdog();
   };
 
   const handleOpenInNewTab = () => {
@@ -134,17 +121,20 @@ export default function App() {
   };
 
   const handleRetry = () => {
-    startIframeWatchdog();
-
     const iframeElement = iframeRef.current;
 
     if (iframeElement) {
       try {
-        iframeElement.src = IFRAME_URL;
+        iframeElement.contentWindow?.location.reload();
       } catch (error) {
         console.warn('Impossibile reimpostare l\'URL dell\'iframe:', error);
+        iframeElement.src = IFRAME_URL;
       }
     }
+
+    setIframeBlocked(false);
+    setIframeErrorMessage('');
+    setIsIframeLive(false);
   };
 
   const handleFileUpload = (event) => {
