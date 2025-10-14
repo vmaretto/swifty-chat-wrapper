@@ -1,7 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 if (typeof window !== 'undefined' && !window.describeIframeError) {
-  window.describeIframeError = () => '';
+  window.describeIframeError = (reason) => {
+    const code = typeof reason === 'string' ? reason.toLowerCase() : '';
+
+    if (code.includes('login')) {
+      return 'Per completare l\'accesso apri Switch Food Explorer in una nuova scheda.';
+    }
+
+    if (code.includes('auth') || code.includes('session')) {
+      return 'Per motivi di sicurezza l\'area di autenticazione non è disponibile nell\'iframe.';
+    }
+
+    return '';
+  };
 }
 
 async function callChatGPT(recipeJson, userMessage) {
