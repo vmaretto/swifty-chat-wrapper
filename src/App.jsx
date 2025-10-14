@@ -131,9 +131,9 @@ export default function App() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-stone-50">
       <iframe
-        src="https://switch-food-explorer.posti.world/recipe-creation"
-        className="absolute inset-0 h-full w-full border-0"
+        src="https://swifty-chat-wrapper.posti.world/switch/recipe-creation"
         title="Switch Food Explorer"
+        className="absolute inset-0 w-full h-full border-0"
       />
 
       <div className="absolute bottom-6 right-6 flex flex-col items-end gap-4">
