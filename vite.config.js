@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// ✅ Configurazione standard Vite + React per Vercel
+// ✅ Config ottimizzata per Vercel static + Edge
 export default defineConfig({
   plugins: [react()],
-  base: './', // usa percorsi relativi per gli asset
+  base: './',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
