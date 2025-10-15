@@ -2,22 +2,13 @@
   "version": 2,
   "functions": {
     "api/switch/[...path].js": {
-      "runtime": "edge"
+      "runtime": "edge@2.0.0"
     }
   },
   "routes": [
-    {
-      "src": "^/api/switch/.*",
-      "dest": "/api/switch/[...path].js"
-    },
-    {
-      "src": "^/switch/(.*)$",
-      "dest": "/api/switch/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
+    { "src": "^/api/switch/.*", "dest": "/api/switch/[...path].js" },
+    { "src": "^/switch/(.*)$", "dest": "/api/switch/$1" },
+    { "src": "/(.*)", "dest": "/" }
   ],
   "outputDirectory": "dist"
 }
