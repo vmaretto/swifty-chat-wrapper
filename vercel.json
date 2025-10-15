@@ -6,6 +6,5 @@
     { "src": "^/assets/(.*)$", "dest": "/assets/$1" },
     { "src": "^/(favicon\\.ico|robots\\.txt)$", "dest": "/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ],
-  "outputDirectory": "dist"
+  ]
 }
