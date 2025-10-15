@@ -1,14 +1,9 @@
 {
   "version": 2,
-  "functions": {
-    "api/switch/[...path].js": {
-      "runtime": "@vercel/edge@1.0.0"
-    }
-  },
   "routes": [
-    { "src": "^/api/switch/.*", "dest": "/api/switch/[...path].js" },
+    { "src": "^/api/switch/(.*)", "dest": "/api/switch/[...path].js" },
     { "src": "^/switch/(.*)$", "dest": "/api/switch/$1" },
-    { "src": "/(.*)", "dest": "/" }
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "outputDirectory": "dist"
 }

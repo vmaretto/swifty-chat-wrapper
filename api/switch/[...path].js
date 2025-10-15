@@ -22,9 +22,11 @@ function rewriteSetCookie(setCookieHeaders) {
 
 export default async function handler(req) {
   const url = new URL(req.url);
-  // /api/switch/<...>  oppure /switch/<...> (vedi routes) → path verso upstream
+  // /api/switch/<...> oppure /switch/<...> (vedi routes)
   const upstreamPath = url.pathname.replace(/^\/(api\/)?switch\/?/, '');
   const target = new URL(upstreamPath || '', 'https://switch-food-explorer.posti.world');
+  // ✅ conserva la query string
+  target.search = url.search;
 
   // Forward metodo/body/header “sicuri”, forzando origin host dell’upstream
   const headers = new Headers(req.headers);
@@ -57,7 +59,7 @@ export default async function handler(req) {
   }
 
   // Riscrivi Set-Cookie per iframe/same-host
-  const setCookie = upstreamRes.headers.getSetCookie?.() || resHeaders.get('set-cookie');
+  const setCookie = resHeaders.get('set-cookie'); // in Edge standard non c'è getSetCookie()
   const rewritten = rewriteSetCookie(setCookie);
   if (rewritten.length) {
     resHeaders.delete('set-cookie');
