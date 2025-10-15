@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 2, 
   "functions": {
     "api/switch/[...path].js": {
       "runtime": "edge@2.0.0"
