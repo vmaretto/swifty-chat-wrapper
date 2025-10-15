@@ -3,6 +3,8 @@
   "routes": [
     { "src": "^/api/switch/(.*)", "dest": "/api/switch/[...path].js" },
     { "src": "^/switch/(.*)$", "dest": "/api/switch/$1" },
+    { "src": "^/assets/(.*)$", "dest": "/assets/$1" },
+    { "src": "^/(favicon\\.ico|robots\\.txt)$", "dest": "/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ],
   "outputDirectory": "dist"
